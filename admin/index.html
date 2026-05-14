@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SpinTalk Admin — Панель управления</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body class="admin-body">
+
+<div class="admin-shell" id="admin-shell">
+
+  <!-- SIDEBAR -->
+  <aside class="admin-sidebar" id="admin-sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-spin">Spin</span><span class="logo-talk">Talk</span>
+      <span class="admin-badge">ADMIN</span>
+    </div>
+
+    <div class="sidebar-admin-info">
+      <div class="admin-avatar">👤</div>
+      <div>
+        <div class="admin-name" id="admin-name-display">Администратор</div>
+        <div class="admin-role" id="admin-role-display">SuperAdmin</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="dashboard" onclick="navigate(this, 'dashboard')">
+        <span class="nav-icon">📊</span> Дашборд
+      </a>
+      <a href="#" class="nav-item" data-section="users" onclick="navigate(this, 'users')">
+        <span class="nav-icon">👥</span> Пользователи
+        <span class="nav-badge" id="badge-users">0</span>
+      </a>
+      <a href="#" class="nav-item" data-section="sessions" onclick="navigate(this, 'sessions')">
+        <span class="nav-icon">💬</span> Сессии
+      </a>
+      <a href="#" class="nav-item" data-section="reports" onclick="navigate(this, 'reports')">
+        <span class="nav-icon">🚩</span> Жалобы
+        <span class="nav-badge danger" id="badge-reports">0</span>
+      </a>
+      <a href="#" class="nav-item" data-section="bans" onclick="navigate(this, 'bans')">
+        <span class="nav-icon">🔨</span> Блокировки
+      </a>
+      <a href="#" class="nav-item" data-section="moderation" onclick="navigate(this, 'moderation')">
+        <span class="nav-icon">🛡️</span> Модерация
+      </a>
+      <a href="#" class="nav-item" data-section="analytics" onclick="navigate(this, 'analytics')">
+        <span class="nav-icon">📈</span> Аналитика
+      </a>
+      <a href="#" class="nav-item" data-section="settings" onclick="navigate(this, 'settings')">
+        <span class="nav-icon">⚙️</span> Настройки
+      </a>
+      <a href="#" class="nav-item" data-section="logs" onclick="navigate(this, 'logs')">
+        <span class="nav-icon">📋</span> Логи
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-logout" onclick="logout()">← Выйти</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="admin-main">
+
+    <!-- TOP BAR -->
+    <div class="admin-topbar">
+      <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="page-title">Дашборд</div>
+      <div class="topbar-right">
+        <div class="live-indicator">
+          <span class="live-dot"></span> Live
+        </div>
+        <div class="topbar-time" id="topbar-time"></div>
+        <button class="btn-topbar" onclick="refreshData()">↻ Обновить</button>
+      </div>
+    </div>
+
+    <!-- SECTIONS -->
+    <div class="admin-content">
+
+      <!-- ── DASHBOARD ── -->
+      <section class="admin-section active" id="section-dashboard">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon teal">🟢</div>
+            <div class="kpi-body">
+              <div class="kpi-label">Онлайн сейчас</div>
+              <div class="kpi-value" id="kpi-online">4 291</div>
+              <div class="kpi-delta up">+127 за час</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon blue">💬</div>
+            <div class="kpi-body">
+              <div class="kpi-label">Чатов сегодня</div>
+              <div class="kpi-value" id="kpi-chats">1 284 051</div>
+              <div class="kpi-delta up">+12.4% вчера</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon orange">🚩</div>
+            <div class="kpi-body">
+              <div class="kpi-label">Новых жалоб</div>
+              <div class="kpi-value" id="kpi-reports">23</div>
+              <div class="kpi-delta down">Требуют внимания</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon red">🔨</div>
+            <div class="kpi-body">
+              <div class="kpi-label">Блокировок (24ч)</div>
+              <div class="kpi-value" id="kpi-bans">89</div>
+              <div class="kpi-delta">Авто: 71 / Ручных: 18</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHART -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h3>Активность за 24 часа</h3>
+            <div class="chart-legend">
+              <span class="legend-dot teal"></span> Онлайн
+              <span class="legend-dot blue"></span> Чаты
+            </div>
+          </div>
+          <canvas id="activity-chart" height="200"></canvas>
+        </div>
+
+        <!-- RECENT ACTIVITY -->
+        <div class="two-col">
+          <div class="panel-card">
+            <div class="panel-header"><h3>Последние жалобы</h3><a href="#" onclick="navigate(null,'reports')">Все →</a></div>
+            <div id="recent-reports-list" class="list-wrap"></div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h3>Топ стран онлайн</h3></div>
+            <div id="countries-list" class="list-wrap"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── USERS ── -->
+      <section class="admin-section" id="section-users">
+        <div class="section-toolbar">
+          <input type="text" class="admin-search" placeholder="🔍 Поиск по IP, ID, стране..." id="user-search" oninput="filterUsers()"/>
+          <select class="admin-select" id="user-filter-status" onchange="filterUsers()">
+            <option value="">Все статусы</option>
+            <option value="online">Онлайн</option>
+            <option value="banned">Заблокирован</option>
+            <option value="warned">Предупреждён</option>
+          </select>
+          <button class="btn-admin" onclick="banSelected()">🔨 Бан выбранных</button>
+        </div>
+        <div class="panel-card no-pad">
+          <table class="admin-table" id="users-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="select-all-users" onchange="toggleSelectAll()"/></th>
+                <th>ID сессии</th>
+                <th>IP адрес</th>
+                <th>Страна</th>
+                <th>Статус</th>
+                <th>Чатов</th>
+                <th>Жалоб</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="users-pagination"></div>
+      </section>
+
+      <!-- ── SESSIONS ── -->
+      <section class="admin-section" id="section-sessions">
+        <div class="section-toolbar">
+          <span class="toolbar-info">Активных чатов: <strong id="active-sessions-count">0</strong></span>
+          <button class="btn-admin danger" onclick="terminateAllSessions()">⏹ Завершить все</button>
+        </div>
+        <div class="panel-card no-pad">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>ID Чата</th>
+                <th>Участник 1</th>
+                <th>Участник 2</th>
+                <th>Режим</th>
+                <th>Длительность</th>
+                <th>Сообщений</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="sessions-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── REPORTS ── -->
+      <section class="admin-section" id="section-reports">
+        <div class="section-toolbar">
+          <select class="admin-select" id="report-filter" onchange="filterReports()">
+            <option value="">Все жалобы</option>
+            <option value="pending">Ожидают рассмотрения</option>
+            <option value="resolved">Решены</option>
+            <option value="dismissed">Отклонены</option>
+          </select>
+          <button class="btn-admin" onclick="resolveAllReports()">✅ Решить все</button>
+        </div>
+        <div id="reports-list" class="reports-grid"></div>
+      </section>
+
+      <!-- ── BANS ── -->
+      <section class="admin-section" id="section-bans">
+        <div class="section-toolbar">
+          <input type="text" class="admin-search" placeholder="🔍 Поиск по IP..."/>
+          <button class="btn-admin" onclick="showAddBanModal()">+ Добавить блокировку</button>
+        </div>
+        <div class="panel-card no-pad">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>IP / ID</th>
+                <th>Причина</th>
+                <th>Тип</th>
+                <th>Дата</th>
+                <th>До</th>
+                <th>Кем</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="bans-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── MODERATION ── -->
+      <section class="admin-section" id="section-moderation">
+        <div class="moderation-grid">
+          <div class="panel-card">
+            <div class="panel-header"><h3>🤖 Авто-модерация</h3></div>
+            <div class="mod-settings">
+              <label class="mod-toggle-row">
+                <span>Распознавание лиц (возраст)</span>
+                <label class="toggle"><input type="checkbox" checked onchange="toggleMod('face_age',this)"><span class="slider"></span></label>
+              </label>
+              <label class="mod-toggle-row">
+                <span>Детектор обнажённости</span>
+                <label class="toggle"><input type="checkbox" checked onchange="toggleMod('nudity',this)"><span class="slider"></span></label>
+              </label>
+              <label class="mod-toggle-row">
+                <span>Фильтр чата (стоп-слова)</span>
+                <label class="toggle"><input type="checkbox" checked onchange="toggleMod('chat_filter',this)"><span class="slider"></span></label>
+              </label>
+              <label class="mod-toggle-row">
+                <span>Блокировка VPN/Proxy</span>
+                <label class="toggle"><input type="checkbox" onchange="toggleMod('vpn_block',this)"><span class="slider"></span></label>
+              </label>
+              <label class="mod-toggle-row">
+                <span>Авто-бан за нарушения (3 жалобы)</span>
+                <label class="toggle"><input type="checkbox" checked onchange="toggleMod('auto_ban',this)"><span class="slider"></span></label>
+              </label>
+            </div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h3>🚫 Стоп-слова</h3></div>
+            <div class="stopwords-wrap">
+              <div id="stopwords-list" class="stopwords-tags"></div>
+              <div class="stopword-add">
+                <input type="text" class="admin-input" id="stopword-input" placeholder="Добавить слово..."/>
+                <button class="btn-admin sm" onclick="addStopWord()">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h3>📊 Статистика модерации</h3></div>
+            <div class="mod-stats">
+              <div class="mod-stat-row"><span>Заблокировано сегодня (авто)</span><strong class="teal">71</strong></div>
+              <div class="mod-stat-row"><span>Предупреждений выдано</span><strong class="teal">234</strong></div>
+              <div class="mod-stat-row"><span>Жалоб обработано</span><strong class="teal">198</strong></div>
+              <div class="mod-stat-row"><span>Сессий завершено принудительно</span><strong class="orange">12</strong></div>
+              <div class="mod-stat-row"><span>Точность AI-фильтра</span><strong class="teal">97.3%</strong></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── ANALYTICS ── -->
+      <section class="admin-section" id="section-analytics">
+        <div class="analytics-filters">
+          <select class="admin-select" id="analytics-period" onchange="updateAnalytics()">
+            <option value="today">Сегодня</option>
+            <option value="week" selected>Неделя</option>
+            <option value="month">Месяц</option>
+          </select>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-body">
+              <div class="kpi-label">Средняя длит. чата</div>
+              <div class="kpi-value">3:24</div>
+              <div class="kpi-delta up">+8 сек к прошлой неделе</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-body">
+              <div class="kpi-label">Видео vs Текст</div>
+              <div class="kpi-value">68% / 32%</div>
+              <div class="kpi-delta">Видео доминирует</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-body">
+              <div class="kpi-label">Удержание (повторные)</div>
+              <div class="kpi-value">41%</div>
+              <div class="kpi-delta up">+3% к прошлой неделе</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-body">
+              <div class="kpi-label">Пиковая нагрузка</div>
+              <div class="kpi-value">21:00–23:00</div>
+              <div class="kpi-delta">Мск время</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-card">
+          <div class="panel-header"><h3>Активность по часам (неделя)</h3></div>
+          <canvas id="hourly-chart" height="200"></canvas>
+        </div>
+        <div class="two-col">
+          <div class="panel-card">
+            <div class="panel-header"><h3>Страны по трафику</h3></div>
+            <canvas id="countries-chart" height="220"></canvas>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h3>Устройства</h3></div>
+            <canvas id="devices-chart" height="220"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SETTINGS ── -->
+      <section class="admin-section" id="section-settings">
+        <div class="settings-grid">
+          <div class="panel-card">
+            <div class="panel-header"><h3>🌐 Основные настройки</h3></div>
+            <div class="settings-form">
+              <label class="form-group">
+                <span>Название сайта</span>
+                <input type="text" class="admin-input" value="SpinTalk"/>
+              </label>
+              <label class="form-group">
+                <span>Минимальный возраст</span>
+                <input type="number" class="admin-input" value="18" min="13"/>
+              </label>
+              <label class="form-group">
+                <span>Макс. участников одновременно</span>
+                <input type="number" class="admin-input" value="10000"/>
+              </label>
+              <label class="form-group">
+                <span>Режим техобслуживания</span>
+                <label class="toggle"><input type="checkbox" onchange="toggleMaintenance(this)"><span class="slider"></span></label>
+              </label>
+              <label class="form-group">
+                <span>Требовать возрастное подтверждение</span>
+                <label class="toggle"><input type="checkbox" checked><span class="slider"></span></label>
+              </label>
+              <button class="btn-admin" onclick="saveSettings()">💾 Сохранить</button>
+            </div>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h3>👤 Управление модераторами</h3></div>
+            <div id="moderators-list" class="mod-list"></div>
+            <button class="btn-admin sm" style="margin-top:16px" onclick="showAddModeratorModal()">+ Добавить модератора</button>
+          </div>
+          <div class="panel-card">
+            <div class="panel-header"><h3>📧 Уведомления</h3></div>
+            <div class="settings-form">
+              <label class="form-group">
+                <span>Email для жалоб</span>
+                <input type="email" class="admin-input" placeholder="admin@spintalk.ru"/>
+              </label>
+              <label class="form-group">
+                <span>Уведомления в Telegram</span>
+                <input type="text" class="admin-input" placeholder="@bot_token"/>
+              </label>
+              <label class="form-group">
+                <span>Порог жалоб для авто-бана</span>
+                <input type="number" class="admin-input" value="3" min="1"/>
+              </label>
+              <button class="btn-admin" onclick="saveNotifications()">💾 Сохранить</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── LOGS ── -->
+      <section class="admin-section" id="section-logs">
+        <div class="section-toolbar">
+          <select class="admin-select">
+            <option>Все события</option>
+            <option>Подключения</option>
+            <option>Блокировки</option>
+            <option>Жалобы</option>
+            <option>Ошибки</option>
+            <option>Вход в систему</option>
+          </select>
+          <input type="date" class="admin-input sm" id="log-date"/>
+          <button class="btn-admin" onclick="exportLogs()">⬇ Экспорт CSV</button>
+        </div>
+        <div class="panel-card no-pad">
+          <div class="log-stream" id="log-stream"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- BAN MODAL -->
+<div class="admin-modal-overlay" id="ban-modal" style="display:none">
+  <div class="admin-modal">
+    <div class="modal-header"><h3>🔨 Новая блокировка</h3><button onclick="closeBanModal()">✕</button></div>
+    <div class="settings-form">
+      <label class="form-group"><span>IP / ID сессии</span><input type="text" class="admin-input" id="ban-target" placeholder="192.168.1.1"/></label>
+      <label class="form-group">
+        <span>Причина</span>
+        <select class="admin-select" id="ban-reason">
+          <option>Неприемлемый контент</option>
+          <option>Несовершеннолетний</option>
+          <option>Мошенничество / спам</option>
+          <option>Насилие / угрозы</option>
+          <option>Нарушение правил</option>
+        </select>
+      </label>
+      <label class="form-group">
+        <span>Срок блокировки</span>
+        <select class="admin-select" id="ban-duration">
+          <option value="1h">1 час</option>
+          <option value="24h">24 часа</option>
+          <option value="7d">7 дней</option>
+          <option value="30d">30 дней</option>
+          <option value="perm">Навсегда</option>
+        </select>
+      </label>
+      <label class="form-group"><span>Комментарий</span><input type="text" class="admin-input" placeholder="Необязательно..."/></label>
+      <div class="modal-actions-row">
+        <button class="btn-admin danger" onclick="executeBan()">🔨 Заблокировать</button>
+        <button class="btn-cancel-sm" onclick="closeBanModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MODERATOR MODAL -->
+<div class="admin-modal-overlay" id="mod-modal" style="display:none">
+  <div class="admin-modal">
+    <div class="modal-header"><h3>👤 Добавить модератора</h3><button onclick="closeModModal()">✕</button></div>
+    <div class="settings-form">
+      <label class="form-group"><span>Логин</span><input type="text" class="admin-input" id="mod-login"/></label>
+      <label class="form-group"><span>Пароль</span><input type="password" class="admin-input" id="mod-password"/></label>
+      <label class="form-group">
+        <span>Права</span>
+        <select class="admin-select" id="mod-role">
+          <option value="moderator">Модератор</option>
+          <option value="senior_mod">Старший модератор</option>
+          <option value="admin">Администратор</option>
+        </select>
+      </label>
+      <div class="modal-actions-row">
+        <button class="btn-admin" onclick="addModerator()">✅ Добавить</button>
+        <button class="btn-cancel-sm" onclick="closeModModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="admin-toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

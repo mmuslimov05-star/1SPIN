@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SpinTalk — Вход в панель управления</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #080c14; --bg-card: #0e1520; --bg-surface: #131d2e;
+      --accent: #00e5c4; --accent-glow: rgba(0,229,196,0.15);
+      --danger: #ff4757;
+      --text-primary: #e8f0f8; --text-secondary: #7a93b5; --text-muted: #3d5473;
+      --border: rgba(0,229,196,0.12); --border-solid: rgba(255,255,255,0.07);
+      --radius: 12px; --font-display: 'Syne', sans-serif; --font-mono: 'Space Mono', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .bg-grid {
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,196,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,196,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+    }
+    .login-card {
+      position: relative; z-index: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-solid);
+      border-radius: 20px;
+      padding: 48px 40px;
+      width: 420px;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+      animation: card-in 0.3s ease;
+    }
+    @keyframes card-in {
+      from { opacity: 0; transform: translateY(12px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .login-logo {
+      font-size: 28px; font-weight: 800; margin-bottom: 6px; text-align: center;
+    }
+    .logo-spin { color: var(--accent); }
+    .login-subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      letter-spacing: 1px;
+      margin-bottom: 36px;
+      text-transform: uppercase;
+    }
+    .form-group {
+      display: flex; flex-direction: column; gap: 7px;
+      margin-bottom: 18px;
+    }
+    .form-group label {
+      font-size: 12px; font-weight: 600;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .form-input {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-solid);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--text-muted); }
+    .btn-login {
+      width: 100%;
+      background: var(--accent);
+      color: var(--bg-base);
+      border: none;
+      padding: 14px;
+      border-radius: var(--radius);
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+      letter-spacing: -0.3px;
+    }
+    .btn-login:hover { background: #00b89e; transform: translateY(-1px); }
+    .btn-login:active { transform: translateY(0); }
+    .error-msg {
+      color: var(--danger); font-size: 13px;
+      text-align: center; margin-top: 12px;
+      display: none;
+    }
+    .back-link {
+      display: block; text-align: center; margin-top: 20px;
+      color: var(--text-muted); font-size: 13px; text-decoration: none;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+    .shield-icon { font-size: 48px; text-align: center; display: block; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="login-card">
+  <span class="shield-icon">🛡️</span>
+  <div class="login-logo"><span class="logo-spin">Spin</span>Talk</div>
+  <div class="login-subtitle">Панель администратора</div>
+
+  <div class="form-group">
+    <label>Логин</label>
+    <input type="text" class="form-input" id="login-input" placeholder="admin" autocomplete="username"/>
+  </div>
+  <div class="form-group">
+    <label>Пароль</label>
+    <input type="password" class="form-input" id="password-input" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+  </div>
+
+  <button class="btn-login" onclick="doLogin()">Войти →</button>
+  <div class="error-msg" id="error-msg">❌ Неверный логин или пароль</div>
+  <a href="../index.html" class="back-link">← Вернуться на сайт</a>
+</div>
+
+<script>
+  // Если уже залогинен — редиректим
+  if (sessionStorage.getItem('spintalk_admin')) {
+    window.location.href = 'index.html';
+  }
+
+  async function doLogin() {
+    const login    = document.getElementById('login-input').value.trim();
+    const password = document.getElementById('password-input').value;
+    const err      = document.getElementById('error-msg');
+    const btn      = document.querySelector('.btn-login');
+
+    if (!login || !password) {
+      err.textContent  = '❌ Введите логин и пароль';
+      err.style.display = 'block';
+      return;
+    }
+
+    btn.textContent  = 'Вход...';
+    btn.disabled     = true;
+
+    try {
+      const res  = await fetch('/api/admin/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ login, password }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        sessionStorage.setItem('spintalk_admin', JSON.stringify({
+          login:  data.login,
+          role:   data.role,
+          secret: data.secret,
+        }));
+        window.location.href = 'index.html';
+      } else {
+        err.textContent   = '❌ ' + (data.error || 'Неверный логин или пароль');
+        err.style.display = 'block';
+        document.getElementById('password-input').value = '';
+        setTimeout(() => err.style.display = 'none', 3000);
+      }
+    } catch (e) {
+      err.textContent   = '❌ Ошибка сервера. Попробуйте ещё раз.';
+      err.style.display = 'block';
+    } finally {
+      btn.textContent = 'Войти →';
+      btn.disabled    = false;
+    }
+  }
+</script>
+</body>
+</html>
