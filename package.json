@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
+    "mongodb": "^7.2.0",
     "mongoose": "^8.1.0",
     "socket.io": "^4.6.2"
   },
@@ -23,6 +25,12 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["chat","videochat","webrtc","socket.io","roulette"],
+  "keywords": [
+    "chat",
+    "videochat",
+    "webrtc",
+    "socket.io",
+    "roulette"
+  ],
   "license": "UNLICENSED"
 }
