@@ -10,9 +10,7 @@
 </head>
 <body>
 
-<!-- ════════════════════════════════════════════
-     ЛЕНДИНГ
-════════════════════════════════════════════ -->
+<!-- ════════ ЛЕНДИНГ ════════ -->
 <div id="landing-page" class="page active">
   <div class="bg-grid"></div>
   <div class="noise-overlay"></div>
@@ -22,27 +20,64 @@
       <span class="logo-spin">Spin</span><span class="logo-talk">Talk</span>
       <span class="logo-dot"></span>
     </div>
-    <nav class="header-nav">
-      <a href="#rules" class="nav-link">Правила</a>
-      <a href="#about" class="nav-link">О нас</a>
-      <button class="btn-nav" onclick="showPage('report-page')">Пожаловаться</button>
-    </nav>
   </header>
 
   <main class="landing-main">
     <div class="hero-section">
-      <div class="hero-badge">
-        🌍 <span id="online-count">0</span> онлайн прямо сейчас
-      </div>
-
       <h1 class="hero-title">
         Общайся<br/>
         <span class="title-accent">с незнакомцами</span><br/>
         по всему миру
       </h1>
-      <p class="hero-sub">Видео и текстовый чат. Анонимно. Мгновенно. Бесплатно.</p>
+      <p class="hero-sub">Видео и текстовый чат. Мгновенно. Бесплатно.</p>
 
-      <!-- Кнопки режима -->
+      <!-- НИКНЕЙМ -->
+      <div class="profile-form">
+        <div class="field-group">
+          <label class="field-label">Ваш никнейм</label>
+          <input type="text" id="nickname-input" class="field-input" placeholder="Например: Алекс" maxlength="20" autocomplete="off"/>
+        </div>
+
+        <div class="field-row">
+          <div class="field-group flex-1">
+            <label class="field-label">Ваш пол</label>
+            <div class="gender-select">
+              <button type="button" class="gender-btn" data-gender="male" onclick="selectGender(this,'me')">♂ Мужской</button>
+              <button type="button" class="gender-btn" data-gender="female" onclick="selectGender(this,'me')">♀ Женский</button>
+            </div>
+          </div>
+          <div class="field-group" style="width:120px">
+            <label class="field-label">Возраст</label>
+            <input type="number" id="age-input" class="field-input" placeholder="25" min="18" max="99"/>
+          </div>
+        </div>
+
+        <div class="divider-line">Кого ищем?</div>
+
+        <div class="field-row">
+          <div class="field-group flex-1">
+            <label class="field-label">Пол собеседника</label>
+            <div class="gender-select">
+              <button type="button" class="gender-btn" data-gender="male" onclick="selectGender(this,'look')">♂ Муж</button>
+              <button type="button" class="gender-btn" data-gender="female" onclick="selectGender(this,'look')">♀ Жен</button>
+              <button type="button" class="gender-btn active" data-gender="any" onclick="selectGender(this,'look')">Любой</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Возраст собеседника</label>
+          <div class="age-range-select">
+            <button type="button" class="age-btn" data-age="18-25" onclick="selectAge(this)">18-25</button>
+            <button type="button" class="age-btn" data-age="25-35" onclick="selectAge(this)">25-35</button>
+            <button type="button" class="age-btn" data-age="35-50" onclick="selectAge(this)">35-50</button>
+            <button type="button" class="age-btn" data-age="50+" onclick="selectAge(this)">50+</button>
+            <button type="button" class="age-btn active" data-age="any" onclick="selectAge(this)">Любой</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Режим чата -->
       <div class="mode-cards">
         <div class="mode-card" id="card-video" onclick="startChat('video')">
           <div class="mode-icon">📹</div>
@@ -58,72 +93,25 @@
         </div>
       </div>
 
-      <!-- Интересы -->
-      <div class="interests-section">
-        <label class="interests-label">Интересы (необязательно):</label>
-        <div class="tags-input-wrapper">
-          <div class="tags-display" id="tags-display"></div>
-          <input type="text" id="interest-input" class="tag-input"
-                 placeholder="Введите и нажмите Enter..." maxlength="30"/>
-        </div>
-        <div class="preset-tags">
-          <span class="preset-tag" onclick="addPresetTag(this)">🎮 Игры</span>
-          <span class="preset-tag" onclick="addPresetTag(this)">🎵 Музыка</span>
-          <span class="preset-tag" onclick="addPresetTag(this)">🎬 Кино</span>
-          <span class="preset-tag" onclick="addPresetTag(this)">🏋️ Спорт</span>
-          <span class="preset-tag" onclick="addPresetTag(this)">💻 IT</span>
-          <span class="preset-tag" onclick="addPresetTag(this)">📚 Книги</span>
-          <span class="preset-tag" onclick="addPresetTag(this)">✈️ Путешествия</span>
-          <span class="preset-tag" onclick="addPresetTag(this)">🍕 Еда</span>
-        </div>
-      </div>
-
-      <!-- Возраст -->
       <div class="age-confirm">
         <label class="checkbox-label">
-          <input type="checkbox" id="age-check" onchange="checkAge()"/>
+          <input type="checkbox" id="age-check"/>
           <span class="checkbox-custom"></span>
           Мне 18 лет или больше, я принимаю <a href="#rules">правила сервиса</a>
         </label>
       </div>
     </div>
-
-    <!-- Статистика -->
-    <div class="stats-strip">
-      <div class="stat-item">
-        <div class="stat-num" id="stat-chats">0</div>
-        <div class="stat-label">чатов сегодня</div>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <div class="stat-num" id="stat-countries">193</div>
-        <div class="stat-label">стран</div>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <div class="stat-num" id="stat-online">0</div>
-        <div class="stat-label">онлайн</div>
-      </div>
-    </div>
   </main>
 
   <footer class="site-footer">
-    <p>
-      © 2024 SpinTalk. Для пользователей 18+. &nbsp;
-      <a href="#privacy">Конфиденциальность</a> ·
-      <a href="#rules">Правила</a> ·
-      <a href="/admin/login.html">Вход для персонала</a>
-    </p>
+    <p>© 2024 SpinTalk. Для пользователей 18+. <a href="#privacy">Конфиденциальность</a> · <a href="#rules">Правила</a></p>
   </footer>
 </div>
 
-<!-- ════════════════════════════════════════════
-     ЧАТ
-════════════════════════════════════════════ -->
+<!-- ════════ ЧАТ ════════ -->
 <div id="chat-page" class="page">
   <div class="chat-layout" id="chat-layout">
 
-    <!-- Топбар -->
     <div class="chat-topbar">
       <div class="logo small" onclick="goHome()" style="cursor:pointer">
         <span class="logo-spin">Spin</span><span class="logo-talk">Talk</span>
@@ -134,16 +122,12 @@
       </div>
       <div class="topbar-actions">
         <button class="btn-icon" title="Настройки" onclick="toggleSettings()">⚙️</button>
-        <button class="btn-icon" title="Пожаловаться" onclick="reportUser()"
-                id="btn-report" disabled>🚩</button>
+        <button class="btn-icon" title="Пожаловаться" onclick="reportUser()" id="btn-report" disabled>🚩</button>
         <button class="btn-danger-sm" onclick="goHome()">✕ Выйти</button>
       </div>
     </div>
 
-    <!-- Видео -->
     <div class="video-area" id="video-area">
-
-      <!-- Удалённое видео -->
       <div class="video-wrapper remote" id="remote-video-wrap">
         <video id="remote-video" autoplay playsinline></video>
         <div class="video-placeholder" id="remote-placeholder">
@@ -155,53 +139,40 @@
           <p id="placeholder-text">Ищем собеседника...</p>
         </div>
         <div class="video-info-badge" id="stranger-badge" style="display:none">
-          <span>👤 Собеседник</span>
-          <span id="stranger-country" class="country-flag"></span>
+          <span id="partner-info">👤 Собеседник</span>
         </div>
       </div>
-
-      <!-- Локальное видео -->
       <div class="video-wrapper local" id="local-video-wrap">
         <video id="local-video" autoplay playsinline muted></video>
         <div class="local-label">Вы</div>
         <div class="video-controls-float">
-          <button class="btn-float" id="btn-cam"
-                  onclick="toggleCamera()" title="Камера">📷</button>
-          <button class="btn-float" id="btn-mic"
-                  onclick="toggleMic()" title="Микрофон">🎤</button>
+          <button class="btn-float" id="btn-cam" onclick="toggleCamera()" title="Камера">📷</button>
+          <button class="btn-float" id="btn-mic" onclick="toggleMic()" title="Микрофон">🎤</button>
         </div>
       </div>
     </div>
 
-    <!-- Панель чата -->
     <div class="chat-panel" id="chat-panel">
-      <div class="messages-wrap" id="messages-wrap">
-        <div class="system-msg">Добро пожаловать в SpinTalk! 👋 Нажмите «Следующий» для поиска.</div>
-      </div>
+      <div class="messages-wrap" id="messages-wrap"></div>
       <div class="message-input-bar">
-        <input type="text" id="msg-input" class="msg-input"
-               placeholder="Напишите сообщение..." maxlength="500"
-               onkeydown="handleMsgKey(event)"/>
+        <input type="text" id="msg-input" class="msg-input" placeholder="Напишите сообщение..." maxlength="500" onkeydown="handleMsgKey(event)"/>
         <button class="btn-send" onclick="sendMessage()">➤</button>
       </div>
     </div>
 
-    <!-- Кнопки действий -->
     <div class="action-bar">
-      <button class="btn-skip" onclick="skipPartner()">
+      <button class="btn-skip" onclick="skipPartner()" id="btn-skip">
         <span>⏭</span> Следующий
       </button>
       <div class="action-center">
         <span class="chat-timer" id="chat-timer">00:00</span>
       </div>
-      <button class="btn-stop" onclick="stopChat(); goHome()">
+      <button class="btn-stop" onclick="toggleStopStart()" id="btn-stop-start">
         ⏹ Стоп
       </button>
     </div>
-
   </div>
 
-  <!-- Панель настроек -->
   <div class="settings-panel" id="settings-panel">
     <div class="settings-header">
       <h3>Настройки</h3>
@@ -209,17 +180,8 @@
     </div>
     <div class="settings-body">
       <label class="setting-row">
-        <span>Видеокамера</span>
-        <select id="camera-select" class="setting-select"></select>
-      </label>
-      <label class="setting-row">
-        <span>Микрофон</span>
-        <select id="mic-select" class="setting-select"></select>
-      </label>
-      <label class="setting-row">
         <span>Тема</span>
-        <select id="theme-select" class="setting-select"
-                onchange="changeTheme(this.value)">
+        <select id="theme-select" class="setting-select" onchange="changeTheme(this.value)">
           <option value="dark">Тёмная</option>
           <option value="light">Светлая</option>
         </select>
@@ -228,9 +190,7 @@
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     СТРАНИЦА ЖАЛОБЫ
-════════════════════════════════════════════ -->
+<!-- ЖАЛОБА -->
 <div id="report-page" class="page">
   <div class="modal-center">
     <div class="modal-card">
@@ -246,31 +206,18 @@
           <option>Другое</option>
         </select>
         <label>Описание (необязательно):</label>
-        <textarea class="report-textarea" id="report-desc"
-                  placeholder="Опишите ситуацию..."></textarea>
+        <textarea class="report-textarea" id="report-desc" placeholder="Опишите ситуацию..."></textarea>
         <div class="modal-actions">
-          <button class="btn-report-submit" onclick="submitReport()">
-            Отправить жалобу
-          </button>
-          <button class="btn-cancel" onclick="showPage('chat-page')">
-            Отмена
-          </button>
+          <button class="btn-report-submit" onclick="submitReport()">Отправить</button>
+          <button class="btn-cancel" onclick="showPage('chat-page')">Отмена</button>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     УВЕДОМЛЕНИЕ
-════════════════════════════════════════════ -->
 <div class="toast" id="toast"></div>
 
-<!-- ════════════════════════════════════════════
-     СКРИПТЫ — порядок важен!
-     1. Socket.io (с сервера)
-     2. app.js
-════════════════════════════════════════════ -->
 <script src="/socket.io/socket.io.js"></script>
 <script src="js/app.js"></script>
 </body>
