@@ -1,24 +1,18 @@
 /**
- * SPINTALK — Frontend Application
- * Полное подключение к серверу через Socket.io + WebRTC
+ * SPINTALK Frontend v3.0
+ * - Никнейм, пол, возраст
+ * - Stop/Start логика
+ * - Spectator mode (анонимное наблюдение для модераторов)
  */
 'use strict';
 
-// ── СОСТОЯНИЕ ─────────────────────────────────────
 const state = {
-  chatMode:      null,
-  connected:     false,
-  chatStartTime: null,
-  timerInterval: null,
-  localStream:   null,
-  pc:            null,       // RTCPeerConnection
-  socket:        null,       // Socket.io
-  role:          null,       // 'caller' | 'callee'
-  interests:     [],
-  camEnabled:    true,
-  micEnabled:    true,
-  chatId:        null,
-  messageCount:  0,
+  chatMode: null, connected: false, chatStartTime: null, timerInterval: null,
+  localStream: null, pc: null, socket: null, role: null,
+  camEnabled: true, micEnabled: true, chatId: null,
+  profile: { nickname: '', gender: '', age: 0, lookGender: 'any', lookAge: 'any' },
+  isStopped: false,
+  spectatorPCs: new Map(),
 };
 
 const ICE_SERVERS = [
@@ -27,124 +21,154 @@ const ICE_SERVERS = [
   { urls: 'stun:stun2.l.google.com:19302' },
 ];
 
-// ── ИНИЦИАЛИЗАЦИЯ ─────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  animateCounters();
-  setupTagInput();
   loadTheme();
+  loadProfile();
   connectSocket();
-  startOnlineCounter();
 });
 
-// ── SOCKET.IO ПОДКЛЮЧЕНИЕ ─────────────────────────
+// ── SOCKET.IO ─────────────────────────────────────
 function connectSocket() {
-  state.socket = io({
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 2000,
-  });
+  state.socket = io({ transports: ['websocket'], reconnection: true, reconnectionAttempts: 10, reconnectionDelay: 2000 });
 
-  state.socket.on('connect', () => {
-    console.log('✅ Подключено к серверу:', state.socket.id);
-    showToast('✅ Подключено к серверу');
-  });
+  state.socket.on('connect', () => console.log('✅ Подключено'));
 
   state.socket.on('disconnect', () => {
-    console.log('❌ Отключено от сервера');
-    if (state.connected) {
-      handlePartnerLeft({ reason: 'server_disconnect' });
-    }
+    if (state.connected) handlePartnerLeft({ reason: 'server_disconnect' });
     setStatus('disconnected', 'Переподключение...');
   });
 
-  state.socket.on('connect_error', (err) => {
-    console.error('Ошибка подключения:', err.message);
-    setStatus('disconnected', 'Ошибка соединения');
-  });
-
-  // Найден собеседник
-  state.socket.on('matched', async ({ role, mode, chatId }) => {
-    console.log('🎯 Matched! role:', role, 'mode:', mode);
-    state.role   = role;
-    state.chatId = chatId;
-    state.connected = true;
-
-    handleMatched(mode);
-
+  state.socket.on('matched', async ({ role, mode, chatId, partner }) => {
+    state.role = role; state.chatId = chatId; state.connected = true; state.isStopped = false;
+    handleMatched(mode, partner);
     if (mode === 'video') {
       await initPeerConnection();
       if (role === 'caller') await createOffer();
     }
   });
 
-  // WebRTC сигналинг
-  state.socket.on('signal', async (data) => {
-    await handleSignal(data);
-  });
+  state.socket.on('signal', handleSignal);
 
-  // Сообщение от собеседника
-  state.socket.on('message', ({ text, ts }) => {
-    addMessage(text, 'stranger');
-  });
+  state.socket.on('message', ({ text, ts, from }) => addMessage(text, 'stranger', from));
 
-  // Собеседник ушёл / пропустил
-  state.socket.on('partner:left', ({ reason }) => {
-    handlePartnerLeft({ reason });
-  });
+  state.socket.on('partner:left', ({ reason }) => handlePartnerLeft({ reason }));
 
-  // Статус очереди
   state.socket.on('status', ({ state: s, position }) => {
-    if (s === 'waiting') {
-      setStatus('searching', `Поиск... (${position} в очереди)`);
+    if (s === 'waiting') setStatus('searching', `Поиск... (${position} в очереди)`);
+    if (s === 'maintenance') {
+      showToast('🔧 Сервер на техобслуживании');
+      setTimeout(goHome, 2000);
     }
   });
 
-  // Бан
-  state.socket.on('banned', ({ reason }) => {
+  state.socket.on('stopped', () => {
+    state.connected = false; state.isStopped = true;
     closePeer();
-    stopStream();
-    showPage('landing-page');
-    setTimeout(() => alert(`🚫 Вы заблокированы.\nПричина: ${reason}`), 300);
+    setStatus('disconnected', 'Остановлено');
+    hidePlaceholder(false);
+    setPlaceholderText('Нажмите "Старт" чтобы продолжить');
+    hideStrangerBadge();
+    stopTimer();
+    disableReport(true);
+    updateStopStartBtn();
   });
 
-  // Принудительное завершение модератором
-  state.socket.on('terminated', ({ reason }) => {
-    showToast('⛔ ' + reason);
-    skipPartner();
+  state.socket.on('banned', ({ reason }) => {
+    closePeer(); stopStream(); showPage('landing-page');
+    setTimeout(() => alert(`🚫 ${reason}`), 300);
   });
 
-  // Перезапуск сервера
-  state.socket.on('server:shutdown', ({ message }) => {
-    showToast('⚠️ ' + message);
+  state.socket.on('terminated', ({ reason }) => { showToast('⛔ ' + reason); skipPartner(); });
+  state.socket.on('warning', ({ message }) => { showToast('⚠️ ' + message); });
+  state.socket.on('announcement', ({ message }) => {
+    showToast('📢 ' + message); addSystemMessage('📢 Объявление: ' + message);
   });
-
-  // Жалоба принята
   state.socket.on('report:ack', () => {
-    showToast('✅ Жалоба отправлена. Спасибо!');
+    showToast('✅ Жалоба отправлена');
     setTimeout(() => showPage('chat-page'), 1500);
+  });
+  state.socket.on('error', ({ msg }) => showToast('⚠️ ' + msg));
+
+  // ── SPECTATOR: входящий запрос от наблюдателя ───
+  state.socket.on('spectator:join', async ({ spectatorId }) => {
+    if (!state.localStream) return; // нечего транслировать
+    await createSpectatorConnection(spectatorId);
+  });
+
+  state.socket.on('spectator:signal', async ({ spectatorId, data }) => {
+    let pc = state.spectatorPCs.get(spectatorId);
+    if (!pc) return;
+    try {
+      if (data.type === 'answer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+      } else if (data.candidate) {
+        await pc.addIceCandidate(new RTCIceCandidate(data));
+      }
+    } catch (e) {}
+  });
+
+  state.socket.on('spectator:leave', ({ spectatorId }) => {
+    const pc = state.spectatorPCs.get(spectatorId);
+    if (pc) { pc.close(); state.spectatorPCs.delete(spectatorId); }
   });
 }
 
-// ── НАЧАЛО ЧАТА ───────────────────────────────────
+// ── ПРОФИЛЬ ───────────────────────────────────────
+function selectGender(btn, kind) {
+  const parent = btn.parentElement;
+  parent.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const value = btn.dataset.gender;
+  if (kind === 'me') state.profile.gender = value;
+  else state.profile.lookGender = value;
+}
+
+function selectAge(btn) {
+  btn.parentElement.querySelectorAll('.age-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.profile.lookAge = btn.dataset.age;
+}
+
+function loadProfile() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('spintalk_profile') || '{}');
+    if (saved.nickname) document.getElementById('nickname-input').value = saved.nickname;
+    if (saved.age) document.getElementById('age-input').value = saved.age;
+    if (saved.gender) {
+      const btn = document.querySelector(`.gender-btn[data-gender="${saved.gender}"]`);
+      if (btn && btn.parentElement.querySelectorAll('.gender-btn').length === 2) {
+        selectGender(btn, 'me');
+      }
+    }
+  } catch (e) {}
+}
+
+function saveProfile() {
+  localStorage.setItem('spintalk_profile', JSON.stringify(state.profile));
+}
+
+// ── СТАРТ ЧАТА ────────────────────────────────────
 async function startChat(mode) {
-  const ageCheck = document.getElementById('age-check');
-  if (!ageCheck?.checked) {
-    showToast('⚠️ Подтвердите возраст, чтобы продолжить');
-    return;
-  }
-  if (!state.socket?.connected) {
-    showToast('⚠️ Нет соединения с сервером. Подождите...');
-    return;
-  }
+  if (!document.getElementById('age-check')?.checked) { showToast('⚠️ Подтвердите возраст'); return; }
+  if (!state.socket?.connected) { showToast('⚠️ Нет связи с сервером'); return; }
+
+  const nickname = document.getElementById('nickname-input').value.trim();
+  const age      = parseInt(document.getElementById('age-input').value);
+
+  if (!nickname || nickname.length < 2) { showToast('⚠️ Введите никнейм (мин. 2 символа)'); return; }
+  if (!state.profile.gender) { showToast('⚠️ Выберите ваш пол'); return; }
+  if (!age || age < 18 || age > 99) { showToast('⚠️ Возраст 18-99'); return; }
+
+  state.profile.nickname = nickname;
+  state.profile.age = age;
+  saveProfile();
 
   state.chatMode = mode;
 
-  const layout = document.getElementById('chat-layout');
   if (mode === 'text') {
-    layout.classList.add('text-mode');
+    document.getElementById('chat-layout').classList.add('text-mode');
   } else {
-    layout.classList.remove('text-mode');
+    document.getElementById('chat-layout').classList.remove('text-mode');
     await initCamera();
   }
 
@@ -153,7 +177,6 @@ async function startChat(mode) {
   beginSearch();
 }
 
-// ── ПОИСК СОБЕСЕДНИКА ─────────────────────────────
 function beginSearch() {
   closePeer();
   setStatus('searching', 'Поиск собеседника...');
@@ -162,27 +185,34 @@ function beginSearch() {
   stopTimer();
   disableReport(true);
   hideStrangerBadge();
+  state.isStopped = false;
+  updateStopStartBtn();
 
   state.socket.emit('find', {
-    mode:      state.chatMode,
-    interests: state.interests,
+    mode:       state.chatMode,
+    nickname:   state.profile.nickname,
+    gender:     state.profile.gender,
+    age:        state.profile.age,
+    lookGender: state.profile.lookGender,
+    lookAge:    state.profile.lookAge,
   });
 }
 
-// ── КОГДА НАШЛИ СОБЕСЕДНИКА ───────────────────────
-function handleMatched(mode) {
-  setStatus('connected', 'Собеседник найден!');
+function handleMatched(mode, partner) {
+  setStatus('connected', 'Собеседник найден');
   hidePlaceholder(true);
-  showStrangerBadge('🌍');
+  if (partner) {
+    const info = `👤 ${escapeHtml(partner.nickname || 'Аноним')} · ${partner.gender === 'male' ? '♂' : '♀'} ${partner.age || ''}`;
+    document.getElementById('partner-info').innerHTML = info;
+  }
+  showStrangerBadge();
   startTimer();
   disableReport(false);
-  addSystemMessage('Собеседник подключился! 👋 Начните общение.');
+  addSystemMessage(`Собеседник подключился: ${partner?.nickname || 'Аноним'} 👋`);
 }
 
-// ── КОГДА СОБЕСЕДНИК УШЁЛ ─────────────────────────
 function handlePartnerLeft({ reason }) {
   if (!state.connected && reason !== 'server_disconnect') return;
-
   state.connected = false;
   closePeer();
   stopTimer();
@@ -190,20 +220,14 @@ function handlePartnerLeft({ reason }) {
   hidePlaceholder(false);
   hideStrangerBadge();
 
-  if (reason === 'skip') {
-    addSystemMessage('Собеседник пропустил. Ищем следующего...');
-    setStatus('searching', 'Ищем следующего...');
-    setPlaceholderText('Ищем следующего...');
-    setTimeout(() => beginSearch(), 1000);
-  } else {
-    addSystemMessage('Собеседник отключился. Ищем следующего...');
-    setStatus('searching', 'Ищем следующего...');
-    setPlaceholderText('Ищем следующего...');
-    setTimeout(() => beginSearch(), 1500);
-  }
+  if (state.isStopped) return;
+
+  addSystemMessage(reason === 'skip' ? 'Собеседник пропустил.' : 'Собеседник отключился.');
+  setStatus('searching', 'Ищем следующего...');
+  setPlaceholderText('Ищем следующего...');
+  setTimeout(() => beginSearch(), 1000);
 }
 
-// ── ПРОПУСТИТЬ ────────────────────────────────────
 function skipPartner() {
   state.connected = false;
   closePeer();
@@ -214,44 +238,68 @@ function skipPartner() {
   setStatus('searching', 'Ищем следующего...');
   hidePlaceholder(false);
   setPlaceholderText('Ищем следующего...');
-
+  state.isStopped = false;
+  updateStopStartBtn();
   state.socket.emit('skip');
 }
 
-// ── СТОП ──────────────────────────────────────────
-function stopChat() {
-  state.connected = false;
-  closePeer();
-  stopTimer();
-  stopStream();
-  disableReport(true);
-  state.socket.emit('skip'); // уведомить сервер
+function toggleStopStart() {
+  if (state.isStopped) {
+    // Старт — продолжить поиск
+    state.socket.emit('start');
+    beginSearch();
+  } else {
+    // Стоп
+    state.socket.emit('stop');
+    state.connected = false;
+    state.isStopped = true;
+    closePeer();
+    stopTimer();
+    disableReport(true);
+    hideStrangerBadge();
+    setStatus('disconnected', 'Остановлено');
+    hidePlaceholder(false);
+    setPlaceholderText('Нажмите "Старт" чтобы продолжить');
+    updateStopStartBtn();
+  }
+}
+
+function updateStopStartBtn() {
+  const btn = document.getElementById('btn-stop-start');
+  if (!btn) return;
+  if (state.isStopped) {
+    btn.innerHTML = '▶️ Старт';
+    btn.classList.remove('btn-stop');
+    btn.classList.add('btn-start');
+  } else {
+    btn.innerHTML = '⏹ Стоп';
+    btn.classList.add('btn-stop');
+    btn.classList.remove('btn-start');
+  }
 }
 
 function goHome() {
-  stopChat();
+  state.connected = false;
+  state.isStopped = false;
+  closePeer();
+  stopTimer();
+  stopStream();
+  state.socket.emit('stop');
   showPage('landing-page');
+  updateStopStartBtn();
 }
 
-// ── КАМЕРА И МИК ──────────────────────────────────
+// ── КАМЕРА ────────────────────────────────────────
 async function initCamera() {
   try {
     state.localStream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-      audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 },
+      audio: { echoCancellation: true, noiseSuppression: true },
     });
-    const localVideo = document.getElementById('local-video');
-    if (localVideo) localVideo.srcObject = state.localStream;
-    console.log('✅ Камера и микрофон подключены');
+    document.getElementById('local-video').srcObject = state.localStream;
   } catch (err) {
-    console.warn('⚠️ Камера недоступна:', err.message);
-    showToast('📷 Камера недоступна — режим без видео');
-    // Пробуем только аудио
-    try {
-      state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (e) {
-      console.warn('Аудио тоже недоступно');
-    }
+    showToast('📷 Камера недоступна');
+    try { state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) {}
   }
 }
 
@@ -260,11 +308,8 @@ function toggleCamera() {
   state.camEnabled = !state.camEnabled;
   state.localStream.getVideoTracks().forEach(t => t.enabled = state.camEnabled);
   const btn = document.getElementById('btn-cam');
-  if (btn) {
-    btn.textContent = state.camEnabled ? '📷' : '🚫';
-    btn.classList.toggle('muted', !state.camEnabled);
-  }
-  showToast(state.camEnabled ? '📷 Камера включена' : '🚫 Камера выключена');
+  btn.textContent = state.camEnabled ? '📷' : '🚫';
+  btn.classList.toggle('muted', !state.camEnabled);
 }
 
 function toggleMic() {
@@ -272,157 +317,110 @@ function toggleMic() {
   state.micEnabled = !state.micEnabled;
   state.localStream.getAudioTracks().forEach(t => t.enabled = state.micEnabled);
   const btn = document.getElementById('btn-mic');
-  if (btn) {
-    btn.textContent = state.micEnabled ? '🎤' : '🔇';
-    btn.classList.toggle('muted', !state.micEnabled);
-  }
-  showToast(state.micEnabled ? '🎤 Микрофон включён' : '🔇 Микрофон выключен');
+  btn.textContent = state.micEnabled ? '🎤' : '🔇';
+  btn.classList.toggle('muted', !state.micEnabled);
 }
 
 function stopStream() {
-  if (state.localStream) {
-    state.localStream.getTracks().forEach(t => t.stop());
-    state.localStream = null;
-  }
+  if (state.localStream) { state.localStream.getTracks().forEach(t => t.stop()); state.localStream = null; }
   const lv = document.getElementById('local-video');
   if (lv) lv.srcObject = null;
 }
 
-// ── WebRTC ────────────────────────────────────────
+// ── WEBRTC ────────────────────────────────────────
 async function initPeerConnection() {
   closePeer();
+  state.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 10 });
 
-  state.pc = new RTCPeerConnection({
-    iceServers: ICE_SERVERS,
-    iceCandidatePoolSize: 10,
-  });
-
-  // Добавить локальные треки
   if (state.localStream) {
-    state.localStream.getTracks().forEach(track => {
-      state.pc.addTrack(track, state.localStream);
-    });
+    state.localStream.getTracks().forEach(t => state.pc.addTrack(t, state.localStream));
   }
 
-  // Получить удалённый поток
-  state.pc.ontrack = (event) => {
-    console.log('📹 Получен удалённый поток');
-    const remoteVideo = document.getElementById('remote-video');
-    if (remoteVideo && event.streams[0]) {
-      remoteVideo.srcObject = event.streams[0];
-      hidePlaceholder(true);
-    }
+  state.pc.ontrack = (e) => {
+    const rv = document.getElementById('remote-video');
+    if (rv && e.streams[0]) { rv.srcObject = e.streams[0]; hidePlaceholder(true); }
   };
 
-  // ICE кандидаты
-  state.pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      state.socket.emit('signal', event.candidate);
-    }
+  state.pc.onicecandidate = (e) => {
+    if (e.candidate) state.socket.emit('signal', e.candidate);
   };
 
-  // Состояние ICE
   state.pc.oniceconnectionstatechange = () => {
-    const s = state.pc?.iceConnectionState;
-    console.log('ICE state:', s);
-    if (s === 'failed') {
-      console.log('ICE failed — перезапуск...');
-      state.pc?.restartIce();
-    }
-    if (s === 'disconnected') {
-      setTimeout(() => {
-        if (state.pc?.iceConnectionState === 'disconnected') {
-          handlePartnerLeft({ reason: 'ice_disconnect' });
-        }
-      }, 5000);
-    }
-  };
-
-  // Состояние соединения
-  state.pc.onconnectionstatechange = () => {
-    const s = state.pc?.connectionState;
-    console.log('Connection state:', s);
-    if (s === 'connected') {
-      console.log('✅ WebRTC P2P соединение установлено!');
-    }
-    if (s === 'failed') {
-      handlePartnerLeft({ reason: 'webrtc_failed' });
-    }
+    if (state.pc?.iceConnectionState === 'failed') state.pc.restartIce();
   };
 }
 
 async function createOffer() {
-  if (!state.pc) return;
   try {
-    const offer = await state.pc.createOffer({
-      offerToReceiveVideo: true,
-      offerToReceiveAudio: true,
-    });
+    const offer = await state.pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
     await state.pc.setLocalDescription(offer);
     state.socket.emit('signal', state.pc.localDescription);
-    console.log('📤 Offer отправлен');
-  } catch (err) {
-    console.error('Ошибка создания offer:', err);
-  }
+  } catch (e) {}
 }
 
 async function handleSignal(data) {
   if (!state.pc) await initPeerConnection();
-
   try {
     if (data.type === 'offer') {
       await state.pc.setRemoteDescription(new RTCSessionDescription(data));
       const answer = await state.pc.createAnswer();
       await state.pc.setLocalDescription(answer);
       state.socket.emit('signal', state.pc.localDescription);
-      console.log('📤 Answer отправлен');
     } else if (data.type === 'answer') {
       await state.pc.setRemoteDescription(new RTCSessionDescription(data));
-      console.log('✅ Answer получен');
     } else if (data.candidate) {
       await state.pc.addIceCandidate(new RTCIceCandidate(data));
     }
-  } catch (err) {
-    console.error('Ошибка обработки сигнала:', err);
-  }
+  } catch (e) { console.error('Signal:', e); }
 }
 
 function closePeer() {
-  if (state.pc) {
-    state.pc.close();
-    state.pc = null;
-  }
+  if (state.pc) { state.pc.close(); state.pc = null; }
+  state.spectatorPCs.forEach(pc => pc.close());
+  state.spectatorPCs.clear();
   const rv = document.getElementById('remote-video');
   if (rv) rv.srcObject = null;
+}
+
+// ── SPECTATOR ─ Создать соединение для наблюдателя ──
+async function createSpectatorConnection(spectatorId) {
+  try {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    state.spectatorPCs.set(spectatorId, pc);
+
+    // Передаём наши треки (только отправка)
+    if (state.localStream) {
+      state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
+    }
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) state.socket.emit('spectator:signal', { spectatorId, data: e.candidate });
+    };
+
+    const offer = await pc.createOffer({ offerToReceiveAudio: false, offerToReceiveVideo: false });
+    await pc.setLocalDescription(offer);
+    state.socket.emit('spectator:signal', { spectatorId, data: pc.localDescription });
+  } catch (e) {}
 }
 
 // ── СООБЩЕНИЯ ─────────────────────────────────────
 function sendMessage() {
   const input = document.getElementById('msg-input');
-  const text  = input?.value?.trim();
-  if (!text) return;
-  if (!state.socket?.connected) { showToast('⚠️ Нет соединения'); return; }
-
-  // Показать у себя сразу
-  addMessage(text, 'own');
+  const text = input?.value?.trim();
+  if (!text || !state.connected) return;
+  addMessage(text, 'own', state.profile.nickname);
   input.value = '';
-  state.messageCount++;
-
-  // Отправить реальному собеседнику через сервер
   state.socket.emit('message', { text });
 }
 
-function addMessage(text, side) {
+function addMessage(text, side, from) {
   const wrap = document.getElementById('messages-wrap');
   if (!wrap) return;
-
-  const div  = document.createElement('div');
+  const div = document.createElement('div');
   div.className = `message ${side}`;
   const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  div.innerHTML = `
-    <div class="message-bubble">${escapeHtml(text)}</div>
-    <div class="message-time">${time}</div>
-  `;
+  const name = from ? `<div class="msg-author">${escapeHtml(from)}</div>` : '';
+  div.innerHTML = `${name}<div class="message-bubble">${escapeHtml(text)}</div><div class="message-time">${time}</div>`;
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
 }
@@ -430,8 +428,8 @@ function addMessage(text, side) {
 function addSystemMessage(text) {
   const wrap = document.getElementById('messages-wrap');
   if (!wrap) return;
-  const div  = document.createElement('div');
-  div.className  = 'system-msg';
+  const div = document.createElement('div');
+  div.className = 'system-msg';
   div.textContent = text;
   wrap.appendChild(div);
   wrap.scrollTop = wrap.scrollHeight;
@@ -443,65 +441,47 @@ function clearMessages() {
 }
 
 function handleMsgKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
-// ── ЖАЛОБА ────────────────────────────────────────
-function reportUser() {
-  showPage('report-page');
-}
+function reportUser() { showPage('report-page'); }
 
 function submitReport() {
-  const typeEl = document.querySelector('#report-page select');
-  const descEl = document.querySelector('#report-page textarea');
-  const type   = typeEl?.value || 'Неприемлемый контент';
-  const description = descEl?.value || '';
-
+  const type = document.getElementById('report-type')?.value || 'Неприемлемый контент';
+  const description = document.getElementById('report-desc')?.value || '';
   state.socket.emit('report', { type, description });
 }
 
-// ── UI ХЕЛПЕРЫ ────────────────────────────────────
-function showPage(pageId) {
+// ── UI ────────────────────────────────────────────
+function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const t = document.getElementById(pageId);
-  if (t) t.classList.add('active');
+  document.getElementById(id)?.classList.add('active');
 }
 
 function setStatus(type, text) {
-  const dot   = document.getElementById('status-dot');
-  const label = document.getElementById('status-text');
-  if (dot)   dot.className = `status-dot ${type}`;
-  if (label) label.textContent = text;
+  const dot = document.getElementById('status-dot');
+  const lbl = document.getElementById('status-text');
+  if (dot) dot.className = `status-dot ${type}`;
+  if (lbl) lbl.textContent = text;
 }
 
 function hidePlaceholder(hide) {
   const ph = document.getElementById('remote-placeholder');
   if (ph) ph.style.display = hide ? 'none' : 'flex';
 }
-
-function setPlaceholderText(text) {
+function setPlaceholderText(t) {
   const el = document.getElementById('placeholder-text');
-  if (el) el.textContent = text;
+  if (el) el.textContent = t;
 }
-
-function showStrangerBadge(flag) {
-  const badge  = document.getElementById('stranger-badge');
-  const flagEl = document.getElementById('stranger-country');
-  if (badge)  badge.style.display = 'flex';
-  if (flagEl) flagEl.textContent  = flag;
+function showStrangerBadge() {
+  document.getElementById('stranger-badge').style.display = 'flex';
 }
-
 function hideStrangerBadge() {
-  const badge = document.getElementById('stranger-badge');
-  if (badge) badge.style.display = 'none';
+  document.getElementById('stranger-badge').style.display = 'none';
 }
-
-function disableReport(disabled) {
-  const btn = document.getElementById('btn-report');
-  if (btn) btn.disabled = disabled;
+function disableReport(d) {
+  const b = document.getElementById('btn-report');
+  if (b) b.disabled = d;
 }
 
 // ── ТАЙМЕР ────────────────────────────────────────
@@ -510,105 +490,32 @@ function startTimer() {
   state.chatStartTime = Date.now();
   state.timerInterval = setInterval(updateTimer, 1000);
 }
-
 function stopTimer() {
   if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
   const el = document.getElementById('chat-timer');
   if (el) el.textContent = '00:00';
 }
-
 function updateTimer() {
   if (!state.chatStartTime) return;
-  const elapsed = Math.floor((Date.now() - state.chatStartTime) / 1000);
-  const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
-  const s = String(elapsed % 60).padStart(2, '0');
-  const el = document.getElementById('chat-timer');
-  if (el) el.textContent = `${m}:${s}`;
+  const sec = Math.floor((Date.now() - state.chatStartTime) / 1000);
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  document.getElementById('chat-timer').textContent = `${m}:${s}`;
 }
 
 // ── НАСТРОЙКИ ─────────────────────────────────────
-function toggleSettings() {
-  document.getElementById('settings-panel')?.classList.toggle('open');
+function toggleSettings() { document.getElementById('settings-panel')?.classList.toggle('open'); }
+function changeTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('spintalk-theme', t);
 }
-
-function changeTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('spintalk-theme', theme);
-}
-
 function loadTheme() {
-  const saved = localStorage.getItem('spintalk-theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
+  const s = localStorage.getItem('spintalk-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', s);
   const sel = document.getElementById('theme-select');
-  if (sel) sel.value = saved;
+  if (sel) sel.value = s;
 }
 
-async function loadDevices() {
-  try {
-    await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const camSel  = document.getElementById('camera-select');
-    const micSel  = document.getElementById('mic-select');
-    if (!camSel || !micSel) return;
-    devices.filter(d => d.kind === 'videoinput').forEach((d, i) => {
-      camSel.add(new Option(d.label || `Камера ${i+1}`, d.deviceId));
-    });
-    devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
-      micSel.add(new Option(d.label || `Микрофон ${i+1}`, d.deviceId));
-    });
-  } catch (e) {}
-}
-
-// ── ИНТЕРЕСЫ / ТЕГИ ───────────────────────────────
-function setupTagInput() {
-  const input = document.getElementById('interest-input');
-  if (!input) return;
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const val = input.value.trim().replace(/,/g, '');
-      if (val) addTag(val);
-      input.value = '';
-    }
-    if (e.key === 'Backspace' && !input.value && state.interests.length) {
-      removeTag(state.interests[state.interests.length - 1]);
-    }
-  });
-}
-
-function addTag(text) {
-  if (state.interests.includes(text) || state.interests.length >= 8) return;
-  state.interests.push(text);
-  renderTags();
-}
-
-function addPresetTag(el) {
-  const text = el.textContent.trim();
-  state.interests.includes(text) ? removeTag(text) : addTag(text);
-}
-
-function removeTag(text) {
-  state.interests = state.interests.filter(t => t !== text);
-  renderTags();
-}
-
-function renderTags() {
-  const display = document.getElementById('tags-display');
-  if (!display) return;
-  display.innerHTML = state.interests.map(t =>
-    `<span class="tag">${escapeHtml(t)}<em class="tag-remove" onclick="removeTag('${escapeHtml(t)}')">×</em></span>`
-  ).join('');
-}
-
-// ── ВОЗРАСТ ───────────────────────────────────────
-function checkAge() {}
-function confirmAge() {
-  document.getElementById('age-modal').style.display = 'none';
-  document.getElementById('age-check').checked = true;
-}
-function denyAge() { window.location.href = 'https://www.google.com'; }
-
-// ── TOAST ─────────────────────────────────────────
 let toastTimer;
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -619,56 +526,9 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-// ── СЧЁТЧИКИ ──────────────────────────────────────
-function animateCounters() {
-  const targets = { 'stat-chats': 1284051, 'stat-countries': 193, 'stat-online': 4291 };
-  Object.entries(targets).forEach(([id, target]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    let current = 0;
-    const step  = Math.ceil(target / 80);
-    const iv    = setInterval(() => {
-      current = Math.min(current + step, target);
-      el.textContent = current.toLocaleString('ru-RU');
-      if (current >= target) clearInterval(iv);
-    }, 16);
-  });
-}
-
-function startOnlineCounter() {
-  // Обновлять реальный счётчик с сервера каждые 5 секунд
-  setInterval(async () => {
-    try {
-      const res  = await fetch('/api/stats');
-      const data = await res.json();
-      const el1  = document.getElementById('online-count');
-      const el2  = document.getElementById('stat-online');
-      const val  = data.online || 0;
-      if (el1) el1.textContent = val.toLocaleString('ru-RU');
-      if (el2) el2.textContent = val.toLocaleString('ru-RU');
-      const el3 = document.getElementById('stat-chats');
-      if (el3 && data.chatsToday > 0) el3.textContent = data.chatsToday.toLocaleString('ru-RU');
-    } catch (e) {}
-  }, 5000);
-}
-
-// ── УТИЛИТЫ ───────────────────────────────────────
-function escapeHtml(str) {
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
   const d = document.createElement('div');
-  d.textContent = str;
+  d.textContent = String(s);
   return d.innerHTML;
 }
-
-// Shake анимация
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes shake {
-    0%,100%{transform:translateX(0)}
-    20%{transform:translateX(-6px)}
-    40%{transform:translateX(6px)}
-    60%{transform:translateX(-4px)}
-    80%{transform:translateX(4px)}
-  }
-  .shake{animation:shake 0.4s ease}
-`;
-document.head.appendChild(style);
