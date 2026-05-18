@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Наблюдение — SpinTalk Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="spectate-body">
+
+<div class="spectate-header">
+  <div class="spectate-title">
+    <span style="font-size:22px">👁️</span>
+    <span>Наблюдение за чатом: <code id="chat-id-display" style="font-family:var(--font-mono);font-size:13px;color:var(--accent)">—</code></span>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="spectate-warning">🔴 Live · Анонимное наблюдение</div>
+    <button class="btn-cancel-sm" onclick="window.close()">✕ Закрыть</button>
+  </div>
+</div>
+
+<div class="spectate-grid">
+  <!-- Пользователь 1 -->
+  <div class="spectate-panel">
+    <div class="spectate-user-header">
+      <div class="user-detail">
+        <div class="user-nick" id="user1-nick">—</div>
+        <div class="user-meta" id="user1-meta">—</div>
+      </div>
+      <div class="spectate-actions">
+        <button class="btn-spectate-action" onclick="warnUser(0)">⚠️ Предупредить</button>
+        <button class="btn-spectate-action" onclick="kickUser(0)">👢 Кикнуть</button>
+        <button class="btn-spectate-action ban" onclick="banUser(0)">🔨 Бан IP</button>
+      </div>
+    </div>
+    <div class="spectate-video-wrap">
+      <video id="video-user1" autoplay playsinline></video>
+      <div class="spectate-empty" id="empty-user1">⏳ Ждём видео...</div>
+    </div>
+  </div>
+
+  <!-- Пользователь 2 -->
+  <div class="spectate-panel">
+    <div class="spectate-user-header">
+      <div class="user-detail">
+        <div class="user-nick" id="user2-nick">—</div>
+        <div class="user-meta" id="user2-meta">—</div>
+      </div>
+      <div class="spectate-actions">
+        <button class="btn-spectate-action" onclick="warnUser(1)">⚠️ Предупредить</button>
+        <button class="btn-spectate-action" onclick="kickUser(1)">👢 Кикнуть</button>
+        <button class="btn-spectate-action ban" onclick="banUser(1)">🔨 Бан IP</button>
+      </div>
+    </div>
+    <div class="spectate-video-wrap">
+      <video id="video-user2" autoplay playsinline></video>
+      <div class="spectate-empty" id="empty-user2">⏳ Ждём видео...</div>
+    </div>
+  </div>
+
+  <!-- Сообщения чата (для текстового режима) -->
+  <div class="spectate-messages" id="messages-panel" style="display:none">
+    <h4 style="margin-bottom:10px;font-size:14px;color:var(--accent)">💬 Сообщения чата</h4>
+    <div id="spectate-messages-list"></div>
+  </div>
+</div>
+
+<div class="toast" id="spectate-toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="spectate.js"></script>
+</body>
+</html>
